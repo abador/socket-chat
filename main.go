@@ -34,7 +34,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
 	userCounter++
-	// error with ws so kill routine
+	// error with ws so kill goroutine
 	if err != nil {
 		log.Println(err)
 		return
