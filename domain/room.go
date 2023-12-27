@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"sync"
+	"time"
 )
 
 type Room struct {
@@ -19,29 +20,54 @@ type Room struct {
 func NewRoom(name string, user *User) *Room {
 	users := make(map[uuid.UUID]*User)
 	users[user.Id] = user
-	return &Room{
-		Name:    name,
-		Users:   users,
-		History: []*Message{},
+	room := &Room{
+		Name:         name,
+		Users:        users,
+		History:      []*Message{},
+		MessageQueue: make(chan *Message, 10),
+	}
+	go room.listen()
+	return room
+}
+
+func (r *Room) listen() {
+	messageBatch := make([]*Message, 10)
+	for {
+		select {
+		case message := <-r.MessageQueue:
+			fmt.Printf("Send message: %v \n", message)
+			messageBatch = append(messageBatch, message)
+		default:
+			if err := r.sendMessages(messageBatch); err != nil {
+				fmt.Printf("Problem during batch processing: %v \n", err)
+			}
+			messageBatch = messageBatch[:0]
+			fmt.Println("Sleep 1s")
+			time.Sleep(time.Second)
+		}
 	}
 }
 
-func (r *Room) SendMessage(message *Message) error {
-	r.Lock()
-	r.History = append(r.History, message)
-	r.Unlock()
-	mess, err := json.Marshal(message)
-	if err != nil {
-		return err
-	}
-	r.RLock()
-	for _, user := range r.Users {
-		if err := user.Connection.WriteMessage(websocket.TextMessage, []byte(mess)); err != nil {
-			fmt.Printf("Error sending message to user %v", user.Id)
-			continue
+func (r *Room) sendMessages(messageBatch []*Message) error {
+	for _, message := range messageBatch {
+		r.Lock()
+		r.History = append(r.History, message)
+		r.Unlock()
+		mess, err := json.Marshal(message)
+		if err != nil {
+			return err
 		}
+		r.RLock()
+		fmt.Printf("%v \n", r.Users)
+		for _, user := range r.Users {
+			fmt.Println(user)
+			if err := user.Connection.WriteMessage(websocket.TextMessage, []byte(mess)); err != nil {
+				fmt.Printf("Error sending message to user %v", user.Id)
+				continue
+			}
+		}
+		r.RUnlock()
 	}
-	r.RUnlock()
 	return nil
 }
 
@@ -51,7 +77,9 @@ func (r *Room) Subscribe(user *User) error {
 		r.Users[user.Id] = user
 	}
 	r.Unlock()
-	user.SendResponse(RESP_SUCCESS, fmt.Sprintf("Subscribing to  %v", r.Name), nil)
+	if err := user.SendResponse(RESP_SUCCESS, fmt.Sprintf("Subscribing to  %v", r.Name), nil); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -61,6 +89,8 @@ func (r *Room) Unsubscribe(user *User) error {
 		delete(r.Users, user.Id)
 	}
 	r.Unlock()
-	user.SendResponse(RESP_SUCCESS, fmt.Sprintf("Unsubscribing  %v", r.Name), nil)
+	if err := user.SendResponse(RESP_SUCCESS, fmt.Sprintf("Unsubscribing from  %v", r.Name), nil); err != nil {
+		return err
+	}
 	return nil
 }

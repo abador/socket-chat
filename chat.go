@@ -39,7 +39,8 @@ func (c *Chat) sendMessage(data *domain.Data, user *domain.User) error {
 	c.RLock()
 	defer c.RUnlock()
 	if room, ok := c.rooms[data.Room]; ok {
-		return room.SendMessage(resp)
+		room.MessageQueue <- resp
+		return nil
 	}
 	return errors.New(fmt.Sprintf("Room %v does not exist", data.Room))
 }
