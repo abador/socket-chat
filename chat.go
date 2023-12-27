@@ -71,7 +71,6 @@ func (c *Chat) ProcessRequest(request *domain.Request, user *domain.User) error 
 			return err
 		}
 		room.Subscribe(user)
-		user.SendResponse(domain.RESP_SUCCESS, "Subscribed to room "+room.Name, nil)
 		break
 	case domain.ACTION_UNSUBSCRIBE:
 		room, err := c.getRoom(request.Data.Room)
@@ -80,7 +79,6 @@ func (c *Chat) ProcessRequest(request *domain.Request, user *domain.User) error 
 			return err
 		}
 		room.Unsubscribe(user)
-		user.SendResponse(domain.RESP_SUCCESS, "Unsubscribed from room "+room.Name, nil)
 		break
 	case domain.ACTION_SEND:
 		err := c.sendMessage(&request.Data, user)

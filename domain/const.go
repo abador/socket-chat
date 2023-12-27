@@ -13,3 +13,9 @@ const (
 	RESP_SUCCESS = iota
 	RESP_ERROR
 )
+
+const (
+	DATA_GENERIC = iota
+	DATA_MESSAGE
+	DATA_ROOM
+)
