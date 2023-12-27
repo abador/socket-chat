@@ -3,11 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"time"
-
-	"github.com/gorilla/websocket"
+	"practice-run/domain"
 )
 
 var upgrader = websocket.Upgrader{
@@ -15,10 +14,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 var userCounter = 0
-var chat = &Chat{
-	rooms: map[string]*Room{},
-	users: map[int]*User{},
-}
+var chat = NewChat()
 
 func main() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -33,18 +29,16 @@ func main() {
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
-	userCounter++
 	// error with ws so kill goroutine
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	var user User = User{
-		Id:         userCounter,
-		LastAlive:  time.Now(),
-		Connection: conn,
+	user, err := domain.NewUser(conn)
+	if err != nil {
+		log.Println(err)
+		return
 	}
-
 	for {
 		messageType, raw, err := conn.ReadMessage()
 		// Can't read message
@@ -53,7 +47,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 			return
 		}
-		var req Request
+		var req domain.Request
 
 		switch messageType {
 		/* Leave ping/pong for now
@@ -78,7 +72,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		err = chat.ProcessRequest(&req, &user)
+		err = chat.ProcessRequest(&req, user)
 		if err != nil {
 			// TODO: decide if we want to return errors to users
 			log.Println(err)
